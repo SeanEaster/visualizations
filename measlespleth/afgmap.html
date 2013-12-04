@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+.subunit.AFG { fill: #ddc; }
+.subunit {fill: #eee}
+.subunit-boundary {
+  fill: none;
+  stroke: #777;
+  stroke-dasharray: 2,2;
+  stroke-linejoin: round;
+}
+.subunit-label {
+  fill: #777;
+  fill-opacity: .5;
+  font-size: 20px;
+  font-weight: 300;
+  text-anchor: middle;
+}
+text {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 10px;
+  pointer-events: none;
+}
+</style>
+<body>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://d3js.org/topojson.v1.min.js"></script>
+<script>
+
+var width = 800,
+    height = 600;
+
+var projection = d3.geo.albers()
+    .rotate([-82.5,0])
+    .center([-15, 34])
+    .parallels([29.4,38.47])
+    .scale(3500)
+    .translate([width / 2, height / 2]);
+    
+var path = d3.geo.path()
+        .projection(projection)
+        .pointRadius(2);
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+d3.json("afg.json", function(error, afg) {
+		
+	subunits = topojson.feature(afg, afg.objects.subunits);
+
+   
+    svg.selectAll(".subunit")
+        .data(subunits.features)
+      .enter().append("path")
+        .attr("class", function(d) { return "subunit " + d.id; })
+        .attr("d", path);
+    
+    svg.append("path")
+        .datum(topojson.mesh(afg, afg.objects.subunits, function(a, b) { return a !== b}))
+        .attr("d", path)
+        .attr("class", "subunit-boundary");
+    
+    placefoci = []
+    placelabels = []
+    subunitlabels = []
+    subunitfoci = []
+	
+	subunits.features.forEach(function(d, i) {
+        var c = path.centroid(d)
+        d.x = c[0]
+        d.y = c[1]
+        
+ 
+        subunitfoci.push({x: c[0], y: c[1]});
+        subunitlabels.push({x: c[0], y: c[1], label: d.properties.name})
+    });
+ 
+        
+    labels = placelabels.concat(subunitlabels)
+    foci = placefoci.concat(subunitfoci)
+    
+    
+   	subunitlabels = svg.selectAll(".subunit-label")
+    	.data(subunitlabels, function(d){return d.label})
+			.enter().append("text")
+			.attr("class", function(d) { return "subunit-label " + d.id; })
+		.attr("x", function(d){return d.x})
+		.attr("y", function(d){return d.y})
+	    .text(function(d) { return d.label; });
+    
+    var placeLabels = svg.selectAll('.place-label')
+        .data(placelabels, function(d){return d.label})
+        .enter()
+        .append('text')
+        .attr('class', 'place-label')
+        .attr('x', function(d) { return d.x; })
+        .attr('y', function(d) { return d.y; })
+        .attr('text-anchor', 'middle')
+        .text(function(d) { return d.label; });
+
+    d3.csv("incidents.csv", function(d){
+        return {
+            "wounded": d.civilianwia
+            ,"killed": d.civiliankia
+            ,"lat": d.latitude
+            ,"lon": d.longitude
+        }
+    },function(data){
+        var radscale = d3.scale.sqrt().domain([1, d3.sum(data, function(d){return d.wounded + d.killed})]).range([1.5, Math.sqrt(width * height * 0.03 / Math.PI)])
+        console.log (radscale.domain())
+        var points = data.map(function(d){
+        var coordinates = path.projection()([d.lon, d.lat])
+        return {
+            x: coordinates[0]
+            ,y: coordinates[1]
+            ,r: radscale(d.wounded + d.killed)
+        }
+    })
+    svg.selectAll(".group").data(pointsReduce(points))
+        .enter()
+        .append("circle")
+        .attr("fill", "#b7cbfa")
+        .attr("r", function(d){return d.r})
+        .attr("cx", function(d){return d.x})
+        .attr("cy", function(d){return d.y})
+        .style("fill-opacity", 0.4)
+    svg.selectAll(".dot").data(points)
+        .enter()
+        .append("circle")
+        .attr("fill", "black")
+        .attr("r", 1.5)
+        .attr("cx", function(d){return d.x})
+        .attr("cy", function(d){return d.y})
+        .attr("class", "dot")
+        .style("fill-opacity", 0.5)
+    })
+})
+function pointsReduce(points) {
+	// Takes an array of points with x-y coordinates & radii
+	// Returns array without overlap
+	var overlaps = []
+	points.forEach(function(e,i){
+		points.forEach(function(f,j){
+			if (j > i) {overlaps.push({source: i, target: j, overlap: overlap(e,f)})}
+		})
+	})
+	if (overlaps.filter(function(d){return d.overlap > 0 }).length > 0){
+		overlaps.sort(function(a, b){return b.overlap - a.overlap})
+		topranked = overlaps[0]
+		var newlist = [combinepts(points[topranked.source], points[topranked.target])] 
+		points.forEach(function(e,i,a){
+			if (i != topranked.source && i != topranked.target) {
+				newlist.push(e)
+			}
+		})
+		return pointsReduce(newlist)
+	}
+	else {
+		return points 
+	}
+}
+function overlap(a,b){
+	if (a.r < b.r){
+		var small = a, large = b
+	} else {
+		var small = b, large = a
+	}
+	var origindist = Math.sqrt(Math.pow(small.y - large.y, 2) + Math.pow(small.x - large.x, 2))
+	
+	if (small.r + large.r <= origindist){ // if no intersection, return 0
+		return 0
+	} 
+	if (origindist + small.r <= large.r) { // check to see if small circle is entirely within the other
+		return Math.PI * Math.pow(small.r, 2) 
+	} 
+	
+	var thetalarge = Math.acos((Math.pow(small.r, 2) - Math.pow(origindist, 2) - Math.pow(large.r, 2)) / (-2 * origindist * large.r)) // Regardless where small origin lies, theta values are opposite the same sides
+	var thetasmall = Math.acos((Math.pow(large.r, 2) - Math.pow(origindist, 2) - Math.pow(small.r, 2)) / (-2 * origindist * small.r)) // We now have angles & radii for both arcs
+	
+	if (large.r > origindist) { // check if small origin is within large
+		var area = Math.pow(small.r, 2) * thetasmall / 2 // start with sector of small circle
+		area += (0.5 * Math.sin(thetalarge) * large.r * (large.r - origindist)) // add triangular portion
+		area += (0.5 * Math.pow(large.r, 2) * (thetalarge - Math.sin(thetalarge))) // add final sliver--the difference between large sector and triangle
+		area *= 2 // multiply by two
+		return area
+	} else if (origindist == large.r) { // check is small origin on large circle
+		var area = Math.pow(small.r, 2) * thetasmall / 2 // small sector
+		area += (0.5 * Math.pow(large.r, 2) * (thetalarge - Math.sin(thetalarge))) // add final sliver--the difference between large sector and triangle
+		area *= 2
+		return area
+	} else { // small origin must be outside
+		var area = Math.pow(large.r, 2) * thetalarge + Math.pow(small.r, 2) * thetasmall
+		area -= (Math.pow(large.r, 2) * Math.cos(thetalarge) * Math.sin(thetalarge) + Math.pow(small.r,2) * Math.cos(thetasmall) * Math.sin(thetasmall))
+		area *= 2
+		return area
+	}
+}
+function combinepts(a,b){ 
+    // takes two points with x, y, r & returns one point with area equal to the sum of the first two, oriented on the segment between the origins weighted by area
+	var newarea = Math.PI * (Math.pow(a.r, 2) + Math.pow(b.r, 2))
+	var newradius = Math.sqrt(newarea / Math.PI)
+	var origin = a.x <= b.x ? a : b
+	var target = a.x <= b.x ? b : a
+	var angle = Math.atan((target.y - origin.y)/(target.x - origin.x))
+	var distance = Math.sqrt(Math.pow(target.y - origin.y, 2) + Math.pow(target.x - origin.x, 2))
+	var travelratio = Math.pow(target.r, 2) * Math.PI / newarea
+	var newx = origin.x + distance * travelratio * Math.cos(angle)
+	var newy = origin.y + distance * travelratio * Math.sin(angle)
+	return {x: newx, y: newy, r: newradius}
+}
+</script>
