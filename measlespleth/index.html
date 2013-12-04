@@ -168,28 +168,28 @@ function overlap(a,b){
 	}
 	var origindist = Math.sqrt(Math.pow(small.y - large.y, 2) + Math.pow(small.x - large.x, 2))
 	
-	if (small.r + large.r <= origindist){ // if no intersection, return 0
+	if (small.r + large.r <= origindist){
 		return 0
 	} 
-	if (origindist + small.r <= large.r) { // check to see if small circle is entirely within the other
+	if (origindist + small.r <= large.r) {
 		return Math.PI * Math.pow(small.r, 2) 
 	} 
 	
-	var thetalarge = Math.acos((Math.pow(small.r, 2) - Math.pow(origindist, 2) - Math.pow(large.r, 2)) / (-2 * origindist * large.r)) // Regardless where small origin lies, theta values are opposite the same sides
-	var thetasmall = Math.acos((Math.pow(large.r, 2) - Math.pow(origindist, 2) - Math.pow(small.r, 2)) / (-2 * origindist * small.r)) // We now have angles & radii for both arcs
+	var thetalarge = Math.acos((Math.pow(small.r, 2) - Math.pow(origindist, 2) - Math.pow(large.r, 2)) / (-2 * origindist * large.r))
+	var thetasmall = Math.acos((Math.pow(large.r, 2) - Math.pow(origindist, 2) - Math.pow(small.r, 2)) / (-2 * origindist * small.r))
 	
-	if (large.r > origindist) { // check if small origin is within large
-		var area = Math.pow(small.r, 2) * thetasmall / 2 // start with sector of small circle
-		area += (0.5 * Math.sin(thetalarge) * large.r * (large.r - origindist)) // add triangular portion
-		area += (0.5 * Math.pow(large.r, 2) * (thetalarge - Math.sin(thetalarge))) // add final sliver--the difference between large sector and triangle
-		area *= 2 // multiply by two
-		return area
-	} else if (origindist == large.r) { // check is small origin on large circle
-		var area = Math.pow(small.r, 2) * thetasmall / 2 // small sector
-		area += (0.5 * Math.pow(large.r, 2) * (thetalarge - Math.sin(thetalarge))) // add final sliver--the difference between large sector and triangle
+	if (large.r > origindist) {
+		var area = Math.pow(small.r, 2) * thetasmall / 2
+		area += (0.5 * Math.sin(thetalarge) * large.r * (large.r - origindist))
+		area += (0.5 * Math.pow(large.r, 2) * (thetalarge - Math.sin(thetalarge)))
 		area *= 2
 		return area
-	} else { // small origin must be outside
+	} else if (origindist == large.r) {
+		var area = Math.pow(small.r, 2) * thetasmall / 2
+		area += (0.5 * Math.pow(large.r, 2) * (thetalarge - Math.sin(thetalarge)))
+		area *= 2
+		return area
+	} else {
 		var area = Math.pow(large.r, 2) * thetalarge + Math.pow(small.r, 2) * thetasmall
 		area -= (Math.pow(large.r, 2) * Math.cos(thetalarge) * Math.sin(thetalarge) + Math.pow(small.r,2) * Math.cos(thetasmall) * Math.sin(thetasmall))
 		area *= 2
@@ -197,7 +197,7 @@ function overlap(a,b){
 	}
 }
 function combinepts(a,b){ 
-    // takes two points with x, y, r & returns one point with area equal to the sum of the first two, oriented on the segment between the origins weighted by area
+    // takes two points with x, y, r & returns one point with area equal to the sum of the first two, oriented on the segment between the origins, at a distance weighted by area
 	var newarea = Math.PI * (Math.pow(a.r, 2) + Math.pow(b.r, 2))
 	var newradius = Math.sqrt(newarea / Math.PI)
 	var origin = a.x <= b.x ? a : b
